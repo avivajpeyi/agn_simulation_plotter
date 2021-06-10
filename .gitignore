@@ -1,2 +1,4 @@
 data/*
-
+outdir/
+.DS_Store
+.idea
