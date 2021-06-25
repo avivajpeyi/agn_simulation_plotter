@@ -10,17 +10,15 @@ Saves a plot in an outdir
 
 """
 import os
+from string import ascii_lowercase
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
-import seaborn as sns
-import statsmodels.api as sm
-from scipy import stats
 
 plt.style.use('publication.mplstyle')
 OUTDIR = "outdir"
 
+import numpy as np
 
 def read_qdp_file(fname: str) -> pd.DataFrame:
     """ Reads qdp file of 2 cols and returns x, y data
@@ -32,81 +30,76 @@ def read_qdp_file(fname: str) -> pd.DataFrame:
     return pd.read_csv(fname, sep='\s+', skiprows=row_id_to_skip, names=['x', 'y'])
 
 
-def plot_scatter(data: pd.DataFrame, xlabel: str, ylabel: str):
+def get_axis_limits(ax, scalex=0.88, scaley=0.88):
+    return ax.get_xlim()[1] * scalex, ax.get_ylim()[1] * scaley
+
+@np.vectorize
+def region_1(x, y):
+    if x <= 0:
+        return 1
+    else:
+        return 0
+
+@np.vectorize
+def region_2(x, y):
+    if x > 0.3 and y > 0.5:
+        return 1
+    else:
+        return 0
+
+@np.vectorize
+def region_3(x, y):
+    if 0 < x <= 0.3 and y < 0.3:
+        return 1
+    else:
+        return 0
+
+
+
+
+def add_contour_for_region(ax, r_condtion, kwargs):
+    xs = np.linspace(-1, 1, 100)
+    ys = np.linspace(0, 1, 100)
+    X, Y = np.meshgrid(xs, ys)
+    Z = r_condtion(X, Y)
+    cs = ax.contourf(X, Y, Z, [0.5, 1], **kwargs)
+    cmap = cs.cmap.copy()
+    cmap.set_under("#00000000")
+
+
+def plot_scatter(data, xlabel: str, ylabel: str):
     """Plots a scatter plot using the dataframe's {x,y}."""
     fname = os.path.join(OUTDIR, "scatter.png")
-    fig = plt.figure(figsize=(5, 5))
-    ax = fig.add_subplot(111, xlabel=xlabel, ylabel=ylabel)
-    ax.plot(data.x, data.y, '.')
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
+    fig, axes = plt.subplots(1, 2, figsize=(8, 8.0 / 2.0))
+    for i, ax in enumerate(axes):
+        l = r"$\bf{(" + ascii_lowercase[i] + r")}$"
+        plt_kwargs = dict(marker='.', zorder=-1, alpha=1)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel, rotation=0, labelpad=10.0)
+        ax.set_ylim(0, 1)
+        if i == 0:
+            d = data[i]
+            ax.set_xlim(-1, 1)
+            plt_kwargs.update(dict(s=0.5, alpha=0.75))
+            ax.annotate(l, xy=get_axis_limits(ax, scalex=0.75), fontsize="large", weight='bold')
+            ax.scatter(d.x, d.y, **plt_kwargs)
+            add_contour_for_region(ax, region_1, kwargs=dict(colors=["tab:red"], alpha=0.3, zorder=-10))
+            add_contour_for_region(ax, region_2, kwargs=dict(colors=["tab:orange"], alpha=0.3, zorder=-10))
+            add_contour_for_region(ax, region_3, kwargs=dict(colors=["tab:green"], alpha=0.3, zorder=-10))
+        else:
+            ax.set_xlim(0, 1)
+            ax.annotate(l, xy=get_axis_limits(ax), fontsize="large", weight='bold')
+            ax.scatter(data[i].x, data[i].y, **plt_kwargs, c="tab:blue")
+
     plt.tight_layout()
     fig.savefig(fname)
-
-
-def density_estimation(x, y, xmin, xmax, ymin, ymax):
-    """Creates a density estimate for x,y data (useful for contour plotting)"""
-    X, Y = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
-    positions = np.vstack([X.ravel(), Y.ravel()])
-    values = np.vstack([x, y])
-    kernel = stats.gaussian_kde(values)
-    Z = np.reshape(kernel(positions).T, X.shape)
-    return X, Y, Z
-
-
-def plot_contour(data: pd.DataFrame, xlabel: str, ylabel: str):
-    """Plots a contour and plot using the dataframe's {x,y}."""
-    fname = os.path.join(OUTDIR, "contour.png")
-    xmin, xmax = 0, 1
-    X, Y, Z = density_estimation(data.x, data.y, xmin, xmax, xmin, xmax)
-    fig = plt.figure(figsize=(5, 5))
-    ax = fig.add_subplot(111, xlabel=xlabel, ylabel=ylabel)
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    cmap = "Blues"
-    ax.imshow(np.rot90(Z), cmap=cmap, extent=[xmin, xmax, xmin, xmax])
-    plt.contour(X, Y, Z, cmap=cmap)  # Add contour lines
-    ax.plot(data.x, data.y, 'k.', markersize=2)
-    plt.tight_layout()
-    fig.savefig(fname)
-
-
-def plot_fit(data: pd.DataFrame, xlabel: str, ylabel: str):
-    """Plots a scatter and fit using the dataframe's {x,y}."""
-    x_fit = sm.add_constant(data.x)
-    fit_results = sm.OLS(data.y, x_fit).fit()
-    print(fit_results.summary())
-    fname = os.path.join(OUTDIR, "fitted_scatter.png")
-    fig = plt.figure(figsize=(5, 5))
-    ax = fig.add_subplot(111, xlabel=xlabel, ylabel=ylabel)
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.plot(data.x, data.y, '.', c='tab:blue', markersize=2, zorder=-1, alpha=0.5, label="Data")
-    sns.regplot(
-        x=data.x, y=data.y, x_estimator=np.mean, ax=ax, ci=95, x_bins=8, truncate=False, color="tab:blue"
-    )
-    fit_label = "${y}={m:.2f}{x}+{c:.2f}$".format(
-        y=ylabel.strip('$'),
-        x=xlabel.strip('$'),
-        c=fit_results.params.const,
-        m=fit_results.params.x
-    )
-    ax.plot([], [], label=fit_label)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.legend(fontsize='small', fancybox=False)
-    plt.tight_layout()
-    plt.savefig(fname)
 
 
 def main():
-    data = read_qdp_file("data/anti_p15_t_op.qdp")
-    kwargs = dict(data=data, xlabel=r"$\chi_{\rm{eff}}$", ylabel=r"$q$")
-    # plot_scatter(**kwargs)
-    # plot_contour(**kwargs)
-    plot_fit(**kwargs)
-    # simple_regplot(data.x, data.y)
-    plt.show()
+    data_a = read_qdp_file("data/r7x100_out_qx.qdp")
+    data_b = read_qdp_file("data/anti_p15_t_op.qdp")
+    kwargs = dict(data=[data_a, data_b], xlabel=r"$\chi_{\rm{eff}}$", ylabel=r"$q$")
+    plot_scatter(**kwargs)
 
 
 if __name__ == "__main__":
