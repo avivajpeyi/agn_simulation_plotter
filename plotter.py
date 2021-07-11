@@ -21,11 +21,31 @@ import statsmodels.api as sm
 plt.style.use('publication.mplstyle')
 OUTDIR = "outdir"
 
+DATA = {
+    "a_bulk": "data/r7x100_out_qx.qdp",
+    "a_trap": "data/r7x100_qx_trap.qdp",
+    "b_bulk": "data/anti_p15_b_op.qdp",
+    "b_trap": "data/anti_p15_t_op.qdp",
+    "b_contours": "data/linedata.json",
+}
+
 import numpy as np
 
+class SimData:
+    def __init__(self, label, bulk, trap, contour=""):
+        self.label = label
+        self.bulk = read_qdp_file(bulk)
+        self.trap = read_qdp_file(trap)
+        if contour:
+            self.contour_dat = read_contour_file()
 
-def read_contour_file():
-    with open("data/linedata.json") as f:
+
+
+def read_contour_file(fname):
+    """Conotur data stored in json with data stored in columns with
+    'qs, chiEff_mean_plus_one_sigma, chiEff_mean_minus_one_sigma'
+    """
+    with open(fname) as f:
         data = json.load(f)
     qs = data['qs']
     mean_xeff_plus_1sig = np.mean(data['chiEff_mean_plus_one_sigma'], axis=0)
@@ -103,7 +123,7 @@ def add_fit(data: pd.DataFrame, ax):
     fit_results = sm.OLS(data.y, x_fit).fit()
     # ax.plot(data.x, data.y, '.', c='tab:blue', markersize=2, zorder=-1, alpha=0.5, label="Data")
     sns.regplot(
-        x=data.x, y=data.y,  ax=ax, ci=95, truncate=False, color="tab:blue", scatter=False
+        x=data.x, y=data.y, ax=ax, ci=95, truncate=False, color="tab:blue", scatter=False
     )
     fit_label = "$q={m:.2f}xeff+{c:.2f}$".format(
         c=fit_results.params.const,
