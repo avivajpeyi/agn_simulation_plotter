@@ -7,11 +7,9 @@ Example usage:
 
 """
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 from bilby.core.prior import Uniform, Normal
 from corner import hist2d
-from scipy import stats
 
 plt.style.use('publication.mplstyle')
 OUTDIR = "outdir"
@@ -28,19 +26,9 @@ HIST_KWARGS = dict(
 )
 
 
-def density_estimation(x, y, xmin, xmax, ymin, ymax):
-    """Creates a density estimate for x,y data (useful for contour plotting)"""
-    X, Y = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
-    positions = np.vstack([X.ravel(), Y.ravel()])
-    values = np.vstack([x, y])
-    kernel = stats.gaussian_kde(values)
-    Z = np.reshape(kernel(positions).T, X.shape)
-    return X, Y, Z
-
-
 def plot():
     x_len = 10.0
-    fig = plt.figure(figsize=(x_len / 2.0, x_len / 2.0))
+    fig = plt.figure(figsize=(x_len/2.0 , x_len / 2.0))
     ax = fig.add_subplot(111, xlim=(-1, 1), ylim=(0, 1))
     add_data_to_plot(ax)
     xlab, ylab = r"$\chi_{\rm{eff}}$", r"$q$"
@@ -89,9 +77,9 @@ def plot_rhs_data(ax, c):
     data.append(get_normal_data(x=0.555, y=0.259, scale=0.015, num=1000))
     data.append(get_line_data(m=m, b=1, min_x=0.66, max_x=1, num=50, jitter=0.0001))
     data = pd.concat(data, ignore_index=True)
-    data = format_data(data, [0, 1], [0, 1])
+    data = format_data(data, [-1, 1], [0, 1])
     hist2d(data.x.values, data.y.values, ax=ax, new_fig=False, color=c, **HIST_KWARGS,
-           contour_kwargs=dict(alpha=0.1, linewidths=0.1))
+           contour_kwargs=dict(linewidths=0.5, linestyles="solid"))
 
 
 def plot_lhs_data(ax, c):
@@ -102,20 +90,21 @@ def plot_lhs_data(ax, c):
     data.append(get_normal_data(x=-0.666, y=0.666, scale=0.02, num=1000))
     data = pd.concat(data, ignore_index=True)
     data = format_data(data, [-1, 0], [0, 1])
-    hist2d(data.x.values, data.y.values, ax=ax, new_fig=False, color=c, **HIST_KWARGS,
-           contour_kwargs=dict(alpha=0.1, linewidths=0.1))
+
+    hist2d(data.x.values, data.y.values, ax=ax, new_fig=False, color=c, **HIST_KWARGS, levels=[0.15, 0.55],
+           contour_kwargs=dict(alpha=0.2, linewidths=1, linestyles="dashed"))
 
 
 def add_data_to_plot(ax):
-    rhs_col, lhs_col = "tab:blue", "tab:red"
+    rhs_col, lhs_col = "tab:blue", "red"
     plot_lhs_data(ax, lhs_col)
     plot_rhs_data(ax, rhs_col)
 
 
 def set_xy_lables(ax, xlabel, ylabel):
     xlim, ylim = ax.get_xlim()[1], ax.get_ylim()[1]
-    ax.annotate(xlabel, xy=(xlim * 1.05, ylim * 0), annotation_clip=False, fontsize='xx-large')
-    ax.annotate(ylabel, xy=(xlim * 0.0, ylim * 1.05), annotation_clip=False, fontsize='xx-large')
+    ax.annotate(xlabel, xy=(xlim * 0.0, ylim * -0.3), annotation_clip=False, fontsize='35', ha='center')
+    ax.annotate(ylabel, xy=(xlim * 0.0, ylim * 1.05), annotation_clip=False, fontsize='35')
 
 
 def set_ticks(ax):
@@ -129,7 +118,7 @@ def set_ticks(ax):
     for xtick_label in xtk_labels:
         ax.annotate(xtick_label, xy=(xtick_label, ylim * -0.15), annotation_clip=False, ha='center', fontsize='x-large')
     for ytick_label in ytk_labels:
-        ax.annotate(ytick_label, xy=(xlim * -0.15, ytick_label), annotation_clip=False, va='center', fontsize='x-large')
+        ax.annotate(ytick_label, xy=(xlim * -0.1, ytick_label), annotation_clip=False, va='center', ha='right', fontsize='x-large')
     ax.xaxis.set_ticks_position('none')  # tick markers
     ax.yaxis.set_ticks_position('none')
     add_axes_line(ax, xticks=[-1, 1], yticks=[1], xmin_ticks=[0.6], ymin_ticks=[0.2])

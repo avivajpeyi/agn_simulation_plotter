@@ -56,7 +56,7 @@ text.usetex: True
 
 
 ### AXES
-axes.grid: True
+axes.grid: False
 axes.titlesize      : x-large  # fontsize of the axes title
 axes.labelsize      : x-large    # fontsize of the x any y labels
 axes.facecolor: white

@@ -11,12 +11,14 @@ Saves a plot in an outdir
 """
 import os
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
+from matplotlib import pyplot as plt
 from scipy import stats
+from scipy.interpolate import interp1d
+from statsmodels.stats.outliers_influence import summary_table
 
 plt.style.use('publication.mplstyle')
 OUTDIR = "outdir"
@@ -71,6 +73,49 @@ def plot_contour(data: pd.DataFrame, xlabel: str, ylabel: str):
     fig.savefig(fname)
 
 
+def extrapolate_lines(x, y, new_x):
+    f = interp1d(x, y, kind='cubic', fill_value="extrapolate")
+    return f(new_x)
+
+
+def plot_custom_fit(data, xlabel, ylabel):
+    fig = plt.figure(figsize=(5, 5))
+    ax = fig.add_subplot(111, xlabel=xlabel, ylabel=ylabel)
+
+    x_fit = sm.add_constant(data.x)
+    fit_results = sm.OLS(data.y, x_fit).fit()
+    c = fit_results.params.const,
+    m = fit_results.params.x
+    st, fit_d, ss2 = summary_table(fit_results, alpha=0.05)
+    predict_mean_ci_low, predict_mean_ci_upp = fit_d[:, 4:6].T
+    new_x = np.linspace(-1, 1, num=300)
+    fit_y = m * new_x + c
+    ci_top = extrapolate_lines(data.x, predict_mean_ci_low, new_x)
+    ci_bot = extrapolate_lines(data.x, predict_mean_ci_upp, new_x)
+
+    ax.plot(data.x, data.y, '.', c='tab:blue', markersize=2, zorder=-1, alpha=0.5, label="Data")
+    ax.plot(new_x, fit_y, color="tab:blue", zorder=0, alpha=0.7)
+    ax.fill_between(new_x, ci_top, ci_bot, color="tab:blue", alpha=0.1, zorder=-10)
+
+    fname = os.path.join(OUTDIR, "fitted_scatter_custom.png")
+
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+
+    fit_label = "${y}={m:.2f}{x}+{c:.2f}$".format(
+        y=ylabel.strip('$'),
+        x=xlabel.strip('$'),
+        c=fit_results.params.const,
+        m=fit_results.params.x
+    )
+    ax.plot([], [], label=fit_label)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.legend(fontsize='small', fancybox=False)
+    plt.tight_layout()
+    plt.savefig(fname)
+
+
 def plot_fit(data: pd.DataFrame, xlabel: str, ylabel: str):
     """Plots a scatter and fit using the dataframe's {x,y}."""
     x_fit = sm.add_constant(data.x)
@@ -104,8 +149,9 @@ def main():
     kwargs = dict(data=data, xlabel=r"$\chi_{\rm{eff}}$", ylabel=r"$q$")
     # plot_scatter(**kwargs)
     # plot_contour(**kwargs)
-    plot_fit(**kwargs)
+    # plot_fit(**kwargs)
     # simple_regplot(data.x, data.y)
+    plot_custom_fit(**kwargs)
     plt.show()
 
 
