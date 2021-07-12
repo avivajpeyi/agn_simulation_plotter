@@ -11,12 +11,10 @@ Saves a plot in an outdir
 """
 import json
 import os
-from string import ascii_lowercase
 
 import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns
-import statsmodels.api as sm
+from matplotlib.patches import Polygon
 
 plt.style.use('publication.mplstyle')
 OUTDIR = "outdir"
@@ -29,7 +27,14 @@ DATA = {
     "b_contours": "data/linedata.json",
 }
 
+KWARGS = dict(
+    bulk=dict(color="tab:red"),
+    trap=dict(color="tab:blue"),
+    contour=dict(color="tab:gray")
+)
+
 import numpy as np
+
 
 class SimData:
     def __init__(self, label, bulk, trap, contour=""):
@@ -37,8 +42,13 @@ class SimData:
         self.bulk = read_qdp_file(bulk)
         self.trap = read_qdp_file(trap)
         if contour:
-            self.contour_dat = read_contour_file()
+            self.contour_dat = read_contour_file(contour)
 
+    def add_scatter_to_plot(self, ax, extra_kwargs, scalex):
+        kwargs = dict(zorder=1, **extra_kwargs)
+        ax.scatter(self.trap.xeff, self.trap.q, **kwargs, color='tab:red', marker="s")
+        ax.scatter(self.bulk.xeff, self.bulk.q, **kwargs, color='tab:blue', marker="o")
+        ax.annotate(self.label, xy=get_axis_limits(ax, scalex=scalex), fontsize="large", weight='bold')
 
 
 def read_contour_file(fname):
@@ -64,86 +74,41 @@ def read_qdp_file(fname: str) -> pd.DataFrame:
     """
     contents = open(fname).readlines()
     row_id_to_skip = [id for id, line in enumerate(contents) if line[0] != ' ']
-    return pd.read_csv(fname, sep='\s+', skiprows=row_id_to_skip, names=['x', 'y'])
+    return pd.read_csv(fname, sep='\s+', skiprows=row_id_to_skip, names=['xeff', 'q'])
 
 
 def get_axis_limits(ax, scalex=0.88, scaley=0.88):
     return ax.get_xlim()[1] * scalex, ax.get_ylim()[1] * scaley
 
 
-@np.vectorize
-def region_1(x, y):
-    if x <= 0:
-        return 1
-    else:
-        return 0
-
-
-@np.vectorize
-def region_2(x, y):
-    if x > 0.3 and y > 0.5:
-        return 1
-    else:
-        return 0
-
-
-@np.vectorize
-def region_3(x, y):
-    if 0 < x <= 0.5 and y < 0.3:
-        return 1
-    else:
-        return 0
-
-
-def add_contour_for_region(ax, r_condtion, kwargs):
-    xs = np.linspace(-1, 1, 100)
-    ys = np.linspace(0, 1, 100)
-    X, Y = np.meshgrid(xs, ys)
-    Z = r_condtion(X, Y)
-    cs = ax.contourf(X, Y, Z, [0.5, 1], **kwargs)
-    cmap = cs.cmap.copy()
-    cmap.set_under("#00000000")
-
-
-def plot_lhs_scatter(ax, d, plt_kwargs, l):
-    ax.set_xlim(-1, 1)
-    d_1g = d[(d['x'] <= 0.25) & (d['x'] >= -0.25)]
-    d_2g = d[~((d['x'] <= 0.25) & (d['x'] >= -0.25))]
-    ax.scatter(d_1g.x, d_1g.y, **plt_kwargs, color='tab:blue', marker=',', s=0.1, alpha=0.3)
-    ax.scatter(d_2g.x, d_2g.y, **plt_kwargs, color='tab:gray', marker=',', s=0.1, alpha=0.8)
-    add_contour_for_region(ax, region_1, kwargs=dict(colors=["tab:purple"], alpha=0.4, zorder=-10))
-    add_contour_for_region(ax, region_2, kwargs=dict(colors=["tab:orange"], alpha=0.25, zorder=-10))
-    add_contour_for_region(ax, region_3, kwargs=dict(colors=["tab:green"], alpha=0.25, zorder=-10))
-    ax.annotate(l, xy=get_axis_limits(ax, scalex=0.75), fontsize="large", weight='bold')
-
-
-def add_fit(data: pd.DataFrame, ax):
-    """Plots a scatter and fit using the dataframe's {x,y}."""
-    x_fit = sm.add_constant(data.x)
-    fit_results = sm.OLS(data.y, x_fit).fit()
-    # ax.plot(data.x, data.y, '.', c='tab:blue', markersize=2, zorder=-1, alpha=0.5, label="Data")
-    sns.regplot(
-        x=data.x, y=data.y, ax=ax, ci=95, truncate=False, color="tab:blue", scatter=False
+def add_regions(ax):
+    xeffmin, xeffmax = -1, 1
+    qmin, qmax = 0, 1
+    polys = []
+    kwargs = dict( zorder=-10, alpha=0.15)
+    # xeff < 0
+    polys.append(Polygon(
+        xy=[(xeffmin, qmin), (0, qmin), (0, qmax), (xeffmin, qmax)],
+        color="tab:purple", **kwargs)
     )
-    fit_label = "$q={m:.2f}xeff+{c:.2f}$".format(
-        c=fit_results.params.const,
-        m=fit_results.params.x
+
+    # xeff > 0.3 and q > 0.5:
+    polys.append(Polygon(
+        xy=[(0.3, 0.5), (xeffmax, 0.5), (xeffmax, qmax), (0.3, qmax)],
+        color="tab:orange", **kwargs)
     )
-    print(fit_label)
+
+    # 0 < xeff <= 0.5 and q < 0.3:
+    polys.append(Polygon(
+        xy=[(0, qmin), (0.5, qmin), (0.5, 0.3), (0, 0.3)],
+        color="tab:green", **kwargs)
+    )
+
+    for poly in polys:
+        ax.add_patch(poly)
 
 
-def plot_rhs_plot(ax, d, plt_kwargs, l):
-    ax.set_xlim(-0.2, 1)
-    ax.plot(d.x, d.y, '.', c='tab:blue', markersize=2, zorder=-1, alpha=0.5, label="Data")
-    add_fit(d, ax)
-    plot_rhs_contour(ax)
-    ax.set_xticks([0.0, 0.25, 0.5, 0.75])
-
-    ax.annotate(l, xy=get_axis_limits(ax, scalex=0.85), fontsize="large", weight='bold')
-
-
-def plot_rhs_contour(ax):
-    df = read_contour_file()
+def add_contour(ax, df):
     zord = -30
     kwargs = dict(color="tab:gray", linestyle="dashed", lw=1.5, zorder=zord, alpha=0.5)
     ax.plot(df.xeff_plus, df.q, **kwargs)
@@ -159,31 +124,36 @@ def plot_rhs_contour(ax):
     )
 
 
-def plot_scatter(data, xlabel: str, ylabel: str):
+def plot_scatter(data_a, data_b, xlabel: str, ylabel: str):
     """Plots a scatter plot using the dataframe's {x,y}."""
     fname = os.path.join(OUTDIR, "scatter.png")
     fig, axes = plt.subplots(1, 2, figsize=(8, 8.0 / 2.0))
+
     for i, ax in enumerate(axes):
-        l = r"$\bf{(" + ascii_lowercase[i] + r")}$"
-        plt_kwargs = dict(zorder=-1)
         ax.set_ylim(0, 1)
-        d = data[i]
-        if i == 0:
-            plot_lhs_scatter(ax, d, plt_kwargs, l)
-        else:
-            plot_rhs_plot(ax, d, plt_kwargs, l)
-            plot_rhs_contour(ax)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel, rotation=0, labelpad=10.0)
+        if i == 0:
+            ax.set_xlim(-1, 1)
+        else:
+            ax.set_xlim(-0.2, 1)
+            ax.set_xticks([0.0, 0.25, 0.5, 0.75])
+
+    add_regions(axes[0])
+    data_a.add_scatter_to_plot(axes[0], extra_kwargs=dict( s=0.1, alpha=0.5), scalex=0.75)
+
+    add_contour(axes[1], data_b.contour_dat)
+    data_b.add_scatter_to_plot(axes[1], extra_kwargs=dict(s=3, alpha=1), scalex=0.85)
+
 
     plt.tight_layout()
     fig.savefig(fname)
 
 
 def main():
-    data_a = read_qdp_file("data/r7x100_out_qx.qdp")
-    data_b = read_qdp_file("data/anti_p15_t_op.qdp")
-    kwargs = dict(data=[data_a, data_b], xlabel=r"$\chi_{\rm{eff}}$", ylabel=r"$q$")
+    data_a = SimData(label=r"$\bf{(a)}$", bulk=DATA['a_bulk'], trap=DATA['a_trap'])
+    data_b = SimData(label=r"$\bf{(b)}$", bulk=DATA['b_bulk'], trap=DATA['b_trap'], contour=DATA['b_contours'])
+    kwargs = dict(data_a=data_a, data_b=data_b, xlabel=r"$\chi_{\rm{eff}}$", ylabel=r"$q$")
     plot_scatter(**kwargs)
 
 
