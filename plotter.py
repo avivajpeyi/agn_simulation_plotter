@@ -45,7 +45,7 @@ class SimData:
             self.contour_dat = read_contour_file(contour)
 
     def add_scatter_to_plot(self, ax, extra_kwargs, scalex):
-        kwargs = dict(zorder=1, **extra_kwargs)
+        kwargs = dict(zorder=-5, **extra_kwargs)
         ax.scatter(self.trap.xeff, self.trap.q, **kwargs, color='tab:red', marker="s")
         ax.scatter(self.bulk.xeff, self.bulk.q, **kwargs, color='tab:blue', marker="o")
         ax.annotate(self.label, xy=get_axis_limits(ax, scalex=scalex), fontsize="large", weight='bold')
@@ -85,27 +85,45 @@ def add_regions(ax):
     xeffmin, xeffmax = -1, 1
     qmin, qmax = 0, 1
     polys = []
-    kwargs = dict( zorder=-10, alpha=0.15)
-    # xeff < 0
-    polys.append(Polygon(
-        xy=[(xeffmin, qmin), (0, qmin), (0, qmax), (xeffmin, qmax)],
-        color="tab:purple", **kwargs)
-    )
+    solid_kwarg = dict( zorder=-10, alpha=0.15)
+    line_kwarg = dict(lw=2, fill=False, zorder=-1)
 
-    # xeff > 0.3 and q > 0.5:
-    polys.append(Polygon(
-        xy=[(0.3, 0.5), (xeffmax, 0.5), (xeffmax, qmax), (0.3, qmax)],
-        color="tab:orange", **kwargs)
-    )
-
-    # 0 < xeff <= 0.5 and q < 0.3:
+    # 0 < xeff <= 0.5 and q < 0.3, mid-bot
     polys.append(Polygon(
         xy=[(0, qmin), (0.5, qmin), (0.5, 0.3), (0, 0.3)],
-        color="tab:green", **kwargs)
+        color="tab:green", **solid_kwarg)
+    )
+    polys.append(Polygon(
+        xy=[(0, qmin), (0.5, qmin), (0.5, 0.3), (0, 0.3)],
+        color="tab:green", **line_kwarg)
+    )
+
+    # xeff < 0, left
+    polys.append(Polygon(
+        xy=[(xeffmin, qmin), (0, qmin), (0, qmax), (xeffmin, qmax)],
+        color="tab:purple", **solid_kwarg)
+    )
+    polys.append(Polygon(
+        xy=[(xeffmin, qmin), (0, qmin), (0, qmax), (xeffmin, qmax)],
+        color="tab:purple", **line_kwarg, ls='--')
+    )
+
+    # xeff > 0.3 and q > 0.5, top-right
+    polys.append(Polygon(
+        xy=[(0.3, 0.5), (xeffmax, 0.5), (xeffmax, qmax), (0.3, qmax)],
+        color="tab:orange", **solid_kwarg)
+    )
+    polys.append(Polygon(
+        xy=[(0.3, 0.5), (xeffmax, 0.5), (xeffmax, qmax), (0.3, qmax)],
+        color="tab:orange", **line_kwarg, ls=':')
     )
 
     for poly in polys:
         ax.add_patch(poly)
+
+    ax.annotate('Region 1', (-0.9, 0.9))
+    ax.annotate('Region 2', (0.31, 0.52))
+    ax.annotate('Region 3', (0.15, 0.06),arrowprops=dict(arrowstyle="->"),xytext=(-0.9, 0.05))
 
 
 def add_contour(ax, df):
